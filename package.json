@@ -1,6 +1,7 @@
 {
   "name": "people-recog",
   "version": "0.1.0",
+  "homepage": ".",
   "private": true,
   "dependencies": {
     "react": "^15.5.4",
