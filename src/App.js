@@ -1,11 +1,10 @@
 /* eslint no-undef: 0 */
-
 import React, { Component } from 'react';
 import './App.css';
 import '../node_modules/tracking/build/tracking-min';
 import '../node_modules/tracking/build/data/face';
-import dat from '../node_modules/dat.gui/build/dat.gui.min';
 import Webcam from 'webcamjs';
+import resemble from 'resemblejs';
 
 const debounce = (func, wait, immediate) => {
 	let timeout;
@@ -22,27 +21,14 @@ const debounce = (func, wait, immediate) => {
 	};
 };
 
-const convertURIToImageData = (URI) => {
-  return new Promise((resolve, reject) => {
-    if (URI == null) return reject();
-    const canvas = document.createElement('canvas'),
-        context = canvas.getContext('2d'),
-        image = new Image();
-    image.addEventListener('load', () => {
-      canvas.width = image.width;
-      canvas.height = image.height;
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      resolve(context.getImageData(0, 0, canvas.width, canvas.height));
-    }, false);
-    image.src = URI;
-  });
-}
-
 class App extends Component {
   constructor(props) {
     super(props);
     this.state = {
       pic: '',
+      resultPic: '',
+      match: 0,
+      name: 'Your name',
     };
   }
   componentDidMount() {
@@ -56,37 +42,42 @@ class App extends Component {
 
     tracker.on('track', this.track.bind(this));
 
-    const gui = new dat.GUI();
-    gui.add(tracker, 'edgesDensity', 0.1, 0.5).step(0.01);
-    gui.add(tracker, 'initialScale', 1.0, 10.0).step(0.1);
-    gui.add(tracker, 'stepSize', 1, 5).step(0.1);
-
     Webcam.attach('#video');
   }
 
   track(event) {
-    const canvas = document.getElementById('canvas');
-    const context = canvas.getContext('2d');
-
-    event.data.forEach(() => {
+    if (event.data.length >= 1) {
       if (this.state.pic !== '') {
         debounce(this.doMatch(), 2000);
       }
-    });
+    };
   }
 
   takeSnapshot(callback) {
-    Webcam.snap(callback);
+    if (this.state.name !== '') {
+      Webcam.snap(callback);
+    }
+  }
+
+  addImageToCanvas(canvasId, dataUri, x, y, width, height) {
+    return new Promise((resolve, reject) => {
+      const canvasHidden = document.getElementById(canvasId);
+      const context = canvasHidden.getContext('2d');
+      const image = new Image();
+      image.addEventListener('load', () => {
+        canvas.width = image.width;
+        canvas.height = image.height;
+        context.drawImage(image, x, y, canvas.width, canvas.height);
+        resolve(true);
+      }, false);
+      image.src = dataUri;
+    });
   }
 
   snapshot(dataUri) {
-    convertURIToImageData(dataUri).then((imageData) => {
-      this.setState({
-        pic: imageData,
-        picDataUri: dataUri,
-      });
+    this.setState({
+      pic: dataUri,
     });
-    
   }
 
   doMatch() {
@@ -96,60 +87,46 @@ class App extends Component {
   compareImages(cameraData) {
     const width = 640;
     const height = 480;
-    const canvas = document.getElementById('canvas');
-    const context = canvas.getContext('2d');
-    
-    convertURIToImageData(cameraData).then((imageData) => {
-      const canvasHidden = document.getElementById('canvas-hidden');
-      const contextHidden = canvas.getContext('2d');
+    const canvasHidden = document.getElementById('canvashidden');
 
-      contextHidden.drawImage(this.state.pic, 0, 0, width, height);
-      contextHidden.drawImage(imageData, width, 0, width, height);
+    this.addImageToCanvas('canvashidden', this.state.pic, 0, 0, width, height).then(() => {
+      this.addImageToCanvas('canvashidden', cameraData, width, 0, width, height).then((ret) => {
+        const imageElement = document.createElement('img');
+        imageElement.src = canvasHidden.toDataURL();
+        imageElement.width = width * 2;
+        imageElement.height = height;
 
-      const tracker2 = new tracking.ObjectTracker('face');
+        const tracker2 = new tracking.ObjectTracker('face');
 
-      tracker2.setInitialScale(4);
-      tracker2.setStepSize(2);
-      tracker2.setEdgesDensity(0.1);
+        tracker2.setInitialScale(4);
+        tracker2.setStepSize(2);
+        tracker2.setEdgesDensity(0.1);
 
-      tracking.track('#canvas-hidden', tracker2);
+        tracking.track(imageElement, tracker2);
 
-      tracker2.on('track', (rect) => {
-        console.log(rect);
+        tracker2.once('track', (rect) => {
+          if (rect.data.length >= 2) {
+            const context = canvasHidden.getContext('2d');
+            const data1 = rect.data[0];
+            const imageData1 = context.getImageData(data1.x, data1.y, data1.width, data1.height);
+            const data2 = rect.data[1];
+            const imageData2 = context.getImageData(data2.x, data2.y, data2.width, data2.height);
+
+            resemble(imageData1)
+            .compareTo(imageData2)
+            .ignoreColors()
+            .ignoreAntialiasing()
+            .scaleToSameSize()
+            .onComplete((data) => {
+              this.setState({
+                resultPic: data.getImageDataUrl(),
+                match: 100 - data.misMatchPercentage,
+              });
+            });
+          }
+        });
       });
-    
-    //   const imageData1 = this.state.pic;
-    //   const imageData2 = imageData;
-
-    //   tracking.Brief.N = window.descriptorLength;
-
-    //   const gray1 = tracking.Image.grayscale(tracking.Image.blur(imageData1.data, width, height, blurRadius), width, height);
-    //   const gray2 = tracking.Image.grayscale(tracking.Image.blur(imageData2.data, width, height, blurRadius), width, height);
-
-    //   const corners1 = tracking.Fast.findCorners(gray1, width, height);
-    //   const corners2 = tracking.Fast.findCorners(gray2, width, height);
-
-    //   const descriptors1 = tracking.Brief.getDescriptors(gray1, width, corners1);
-    //   const descriptors2 = tracking.Brief.getDescriptors(gray2, width, corners2);
-
-    //   const matches = tracking.Brief.reciprocalMatch(corners1, descriptors1, corners2, descriptors2);
-    //   matches.sort((a, b) => {
-    //     return b.confidence - a.confidence;
-    //   });
-
-    //   console.log(matches.length);
-
-    //   // console.log(matches);
-
-    //   for (var i = 0; i < Math.min(window.matchesShown, matches.length); i++) {
-    //     const color = '#' + Math.floor(Math.random()*16777215).toString(16);
-    //     // console.log(context);
-    //     context.fillStyle = color;
-    //     context.fillRect(matches[i].keypoint1[0], matches[i].keypoint1[1], 4, 4);
-    //     context.fillRect(matches[i].keypoint2[0] + width, matches[i].keypoint2[1], 4, 4);
-    //   }
     });
-    
   }
 
   render() {
@@ -164,17 +141,35 @@ class App extends Component {
 
         <div className="snapshot">
           <div>
+            <input type="text" defaultValue={this.state.name} onBlur={(evt) => this.setState({ name: evt.target.value })} />
             <button onClick={() => this.takeSnapshot(this.snapshot.bind(this))}>Snapshot</button>
           </div>
 
           {this.state.pic !== '' && (
             <div>
-              <img src={this.state.picDataUri} alt="Snapshot" />
+              <img src={this.state.pic} alt="Snapshot" />
             </div>
           )}
         </div>
 
-        <canvas id="canvas" width="1280" height="480" style={{ display: 'none' }}></canvas>
+        <canvas id="canvashidden" width="1280" height="480" style={{ display: 'none' }}></canvas>
+
+        {this.state.name && (
+          <div className="top-right">
+            {this.state.match > 25 ? (
+              <p>Hi {this.state.name}! I recognised you ;)</p>
+            ) : (
+              <p>Who are you? Take a snapshot so I can recognise you!</p>
+            )}
+            {this.state.resultPic !== '' && (
+              <div className="result">
+                <p><img src={this.state.resultPic} alt="Result pic" /></p>
+                <p>Match: {parseFloat(this.state.match).toFixed(2)}%</p>
+              </div>
+            )}
+            
+          </div>
+        )}
       </div>
     );
   }
