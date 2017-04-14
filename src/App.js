@@ -5,6 +5,7 @@ import '../node_modules/tracking/build/tracking-min';
 import '../node_modules/tracking/build/data/face';
 import Webcam from 'webcamjs';
 import resemble from 'resemblejs';
+import Modal from 'react-modal';
 
 const debounce = (func, wait, immediate) => {
 	let timeout;
@@ -28,7 +29,9 @@ class App extends Component {
       pic: '',
       resultPic: '',
       match: 0,
-      name: 'Your name',
+      name: '',
+      openModal: false,
+      nameSaved: false,
     };
   }
   componentDidMount() {
@@ -47,16 +50,34 @@ class App extends Component {
 
   track(event) {
     if (event.data.length >= 1) {
-      if (this.state.pic !== '') {
+      if (this.state.pic !== '' && this.state.nameSaved) {
         debounce(this.doMatch(), 2000);
       }
     };
   }
 
   takeSnapshot(callback) {
-    if (this.state.name !== '') {
-      Webcam.snap(callback);
-    }
+    Webcam.snap(callback);
+  }
+
+  afterOpenModal() {
+    this.setState({
+      nameSaved: false,
+    });
+  }
+
+  openModal(callback) {
+    this.setState({
+      openModal: true,
+    });
+    this.takeSnapshot(callback);
+  }
+
+  closeModal() {
+    this.setState({
+      openModal: false,
+      nameSaved: true,
+    });
   }
 
   addImageToCanvas(canvasId, dataUri, x, y, width, height) {
@@ -141,35 +162,72 @@ class App extends Component {
 
         <div className="snapshot">
           <div>
-            <input type="text" defaultValue={this.state.name} onBlur={(evt) => this.setState({ name: evt.target.value })} />
-            <button onClick={() => this.takeSnapshot(this.snapshot.bind(this))}>Snapshot</button>
+            <button onClick={() => this.openModal(this.snapshot.bind(this)).bind(this)}>Snapshot</button>
           </div>
 
-          {this.state.pic !== '' && (
+          <Modal
+            isOpen={this.state.openModal}
+            onAfterOpen={this.afterOpenModal.bind(this)}
+            onRequestClose={this.closeModal.bind(this)}
+            contentLabel="Modal"
+            className="modal__content"
+            overlayClassName="modal__overlay"
+          >
             <div>
-              <img src={this.state.pic} alt="Snapshot" />
+              {this.state.pic !== '' && (
+                <div>
+                  <img className="snapshot__img" src={this.state.pic} alt="Snapshot" />
+                </div>
+              )}
+              <div>
+                <label className="label" htmlFor="input-name">
+                  May I ask your name?
+                </label>
+              </div>
+              <div>
+                <input 
+                  id="input-name"
+                  className="input"
+                  name="name"
+                  type="text"
+                  placeHolder="Your name"
+                  onBlur={(evt) => this.setState({ name: evt.target.value })}
+                />
+              </div>
+              <div>
+                <button 
+                  onClick={this.closeModal.bind(this)}
+                  type="button"
+                  className="button"
+                >
+                  Save
+                </button>
+              </div>
             </div>
-          )}
+          </Modal>
         </div>
 
         <canvas id="canvashidden" width="1280" height="480" style={{ display: 'none' }}></canvas>
 
-        {this.state.name && (
-          <div className="top-right">
-            {this.state.match > 25 ? (
-              <p>Hi {this.state.name}! I recognised you ;)</p>
-            ) : (
-              <p>Who are you? Take a snapshot so I can recognise you!</p>
-            )}
-            {this.state.resultPic !== '' && (
-              <div className="result">
-                <p><img src={this.state.resultPic} alt="Result pic" /></p>
-                <p>Match: {parseFloat(this.state.match).toFixed(2)}%</p>
-              </div>
-            )}
-            
-          </div>
-        )}
+        <div className="result">
+          {this.state.nameSaved ? (
+            <div>
+              {this.state.match > 25 ? (
+                <p>Hi {this.state.name}! I recognised you ;)</p>
+              ) : (
+                <p>Oh :( I don't know you.</p>
+              )}
+              {this.state.resultPic !== '' && (
+                <div className="result__picture">
+                  <p><img src={this.state.resultPic} alt="Result pic" /></p>
+                  <p>Match: {parseFloat(this.state.match).toFixed(2)}%</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p>Who are you? Take a snapshot so I can recognise you!</p>
+          )}
+        </div>
       </div>
     );
   }
