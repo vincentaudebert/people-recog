@@ -32,6 +32,7 @@ class App extends Component {
       name: '',
       openModal: false,
       nameSaved: false,
+      noFace: true,
     };
   }
   componentDidMount() {
@@ -53,6 +54,13 @@ class App extends Component {
       if (this.state.pic !== '' && this.state.nameSaved) {
         debounce(this.doMatch(), 2000);
       }
+      this.setState({
+        noFace: false,
+      });
+    } else {
+      this.setState({
+        noFace: true,
+      });
     };
   }
 
@@ -162,7 +170,13 @@ class App extends Component {
 
         <div className="snapshot">
           <div>
-            <button onClick={() => this.openModal(this.snapshot.bind(this)).bind(this)}>Snapshot</button>
+            <button 
+              onClick={() => this.openModal(this.snapshot.bind(this)).bind(this)}
+              disabled={this.state.noFace}
+              className="button"
+            >
+              Snapshot
+            </button>
           </div>
 
           <Modal
