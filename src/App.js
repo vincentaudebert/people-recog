@@ -226,7 +226,7 @@ class App extends Component {
         <div className="result">
           {this.state.nameSaved ? (
             <div>
-              {this.state.match > 25 ? (
+              {this.state.match > 50 ? (
                 <p>Hi {this.state.name}! I recognised you ;)</p>
               ) : (
                 <p>Oh :( I don't know you.</p>
